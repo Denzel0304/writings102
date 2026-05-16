@@ -434,6 +434,11 @@
   }
   #contentEditor b, #contentEditor strong { font-weight: 600; color: var(--text); }
   #contentEditor i, #contentEditor em    { font-style: italic; color: var(--text2); }
+  #contentEditor ol, #contentEditor ul {
+    padding-left: 1.6em;
+    margin: 0.3em 0;
+  }
+  #contentEditor li { margin: 0.1em 0; }
 
   /* ── EMPTY STATE ── */
   .empty-state {
@@ -781,13 +786,6 @@
     <!-- MAIN EDITOR -->
     <div id="main">
       <div class="toolbar">
-        <div class="toolbar-group">
-          <button class="tb-btn" onclick="fmt('bold')"><b>B</b></button>
-          <button class="tb-btn" onclick="fmt('italic')"><i>I</i></button>
-          <div class="toolbar-divider"></div>
-          <button class="tb-btn" onclick="fmt('insertUnorderedList')">≡</button>
-          <button class="tb-btn" onclick="fmt('insertOrderedList')">①</button>
-        </div>
         <div class="toolbar-right">
           <span class="save-status" id="saveStatus">—</span>
           <button class="btn-delete" id="deleteBtn" style="display:none" onclick="deleteWriting()">삭제</button>
@@ -1453,10 +1451,106 @@ function dlBlob(blob, filename) {
   URL.revokeObjectURL(url);
 }
 
-function fmt(cmd) {
-  document.getElementById('contentEditor').focus();
-  document.execCommand(cmd, false, null);
-}
+// ── 본문 자동 리스트 변환 ──────────────────
+// 줄 시작에서 '숫자.' + 스페이스 → <ol start="N"><li>
+// 줄 시작에서 '*'     + 스페이스 → <ul><li>
+// 앞뒤 검증 없이 패턴만 인식되면 변환.
+document.addEventListener('keydown', e => {
+  if (e.key !== ' ' && e.code !== 'Space') return;
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+  const editor = document.getElementById('contentEditor');
+  if (!editor) return;
+
+  const sel = window.getSelection();
+  if (!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  if (!range.collapsed) return;
+  if (!editor.contains(range.startContainer)) return;
+
+  // 캐럿이 위치한 블록 요소 찾기 (없으면 editor 자체)
+  let block = range.startContainer;
+  if (block.nodeType === Node.TEXT_NODE) block = block.parentNode;
+  while (block && block !== editor && block.parentNode !== editor) {
+    block = block.parentNode;
+  }
+  // block === editor 면 텍스트가 editor 직속, 아니면 editor 자식 블록
+
+  // 캐럿 직전(같은 블록 내)까지의 텍스트 추출
+  const preRange = document.createRange();
+  if (block === editor) {
+    preRange.setStart(editor, 0);
+  } else {
+    preRange.setStartBefore(block);
+  }
+  preRange.setEnd(range.startContainer, range.startOffset);
+  const beforeText = preRange.toString();
+
+  // 마지막 줄바꿈 이후의 라인 텍스트만 검사
+  const lineStart  = beforeText.lastIndexOf('\n') + 1;
+  const linePrefix = beforeText.slice(lineStart);
+
+  let listType, startNum, matchLen;
+  const m = linePrefix.match(/^(\d+)\.$/);
+  if (m) {
+    listType = 'ol';
+    startNum = parseInt(m[1], 10);
+    matchLen = m[0].length;
+  } else if (linePrefix === '*') {
+    listType = 'ul';
+    matchLen = 1;
+  } else {
+    return;
+  }
+
+  e.preventDefault();
+
+  // 패턴 텍스트 제거: 캐럿에서 matchLen 만큼 backspace
+  const textNode = range.startContainer;
+  if (textNode.nodeType === Node.TEXT_NODE) {
+    const off = range.startOffset;
+    const t   = textNode.textContent;
+    textNode.textContent = t.slice(0, off - matchLen) + t.slice(off);
+    // 캐럿 보정
+    const fixRange = document.createRange();
+    fixRange.setStart(textNode, off - matchLen);
+    fixRange.collapse(true);
+    sel.removeAllRanges();
+    sel.addRange(fixRange);
+  }
+
+  // 새 리스트 생성
+  const list = document.createElement(listType);
+  if (listType === 'ol' && startNum !== 1) list.setAttribute('start', String(startNum));
+  const li = document.createElement('li');
+  li.appendChild(document.createElement('br'));
+  list.appendChild(li);
+
+  // 삽입 위치: 현재 블록을 교체하거나, 없으면 캐럿 위치에 삽입
+  if (block !== editor && block.parentNode === editor) {
+    const remaining = block.textContent.replace(/[\u200B\s]/g, '');
+    if (remaining.length === 0) {
+      // 블록이 비었으면 통째로 교체
+      editor.replaceChild(list, block);
+    } else {
+      // 블록에 다른 내용이 있으면 그 다음에 추가
+      editor.insertBefore(list, block.nextSibling);
+    }
+  } else {
+    // 텍스트가 editor 직속인 경우 — 캐럿 자리에 삽입
+    const r = sel.getRangeAt(0);
+    r.insertNode(list);
+  }
+
+  // 캐럿을 새 li 안으로
+  const newRange = document.createRange();
+  newRange.setStart(li, 0);
+  newRange.collapse(true);
+  sel.removeAllRanges();
+  sel.addRange(newRange);
+
+  if (typeof onEdit === 'function') onEdit();
+});
 
 let toastTimer;
 function showToast(msg) {
