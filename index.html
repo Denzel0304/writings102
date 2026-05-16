@@ -88,7 +88,7 @@
 
   .sidebar-logo {
     font-family: var(--serif);
-    font-size: 16px;
+    font-size: 22px;
     font-weight: 400;
     color: var(--accent);
     letter-spacing: 0.06em;
@@ -1149,7 +1149,13 @@ function setSaveStatus(state, time) {
     el.textContent = '저장 중...';
   } else if (state === 'saved') {
     el.classList.add('saved');
-    const t = time ? new Date(time).toLocaleTimeString('ko-KR',{hour:'2-digit',minute:'2-digit'}) : '';
+    let t = '';
+    if (time) {
+      const d = new Date(time);
+      const date = d.toLocaleDateString('ko-KR', {year:'numeric', month:'2-digit', day:'2-digit'});
+      const tm   = d.toLocaleTimeString('ko-KR', {hour:'2-digit', minute:'2-digit'});
+      t = `${date} ${tm}`;
+    }
     el.textContent = `저장됨 ${t}`;
   } else if (state === 'error') {
     el.classList.add('error');
