@@ -93,7 +93,10 @@
     color: var(--accent);
     letter-spacing: 0.06em;
     margin-bottom: 12px;
+    cursor: pointer;
+    user-select: none;
   }
+  .sidebar-logo:hover { opacity: 0.75; }
 
   .btn-new {
     width: 100%;
@@ -747,7 +750,7 @@
   <!-- SIDEBAR -->
   <div id="sidebar">
     <div class="sidebar-header">
-      <div class="sidebar-logo">글감 창고</div>
+      <div class="sidebar-logo" onclick="location.reload()" title="새로고침">글감 창고</div>
       <button class="btn-new" onclick="newWriting()">+ 새 글</button>
     </div>
 
